@@ -735,6 +735,7 @@ function apiCall(act, b) {
       if (a === 'reveal' && S.phase === 'choosing') doReveal();
       if (a === 'summary' && S.phase === 'reveal') S.phase = 'summary';
       if (a === 'next' && (S.phase === 'summary' || S.phase === 'reveal')) { if (S.g.over) S.phase = 'ending'; else { S.phase = 'choosing'; S.reveal = null; S.secret = null; freshPicks(); } }
+      if (a === 'free') { for (const [id, pl] of Object.entries(S.players)) if (pl.char === b.char) { delete S.players[id]; ORDER.forEach(c => S.picks[c].agreed = S.picks[c].agreed.filter(x => x !== id)); } }
       if (a === 'reset') { const keep = S.players; reset(); if (b.keepPlayers) S.players = keep; }
       push(); return ({ ok: true });
     }
@@ -821,9 +822,9 @@ function lobby() {
       ${ORDER.map(id => { const s = V.seats[id]; return `<div style="display:flex;align-items:center;gap:16px;min-height:88px;padding:8px 22px 8px 10px;border-radius:20px;background:var(--panel)">
         <span style="width:68px;height:68px;border-radius:34px;overflow:hidden;background:${CAST[id].color};display:flex;justify-content:center;flex:none">${portrait(id, 68)}</span>
         <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:22px;font-weight:800">${esc(CAST[id].name)}</span><span class="muted" style="font-size:16px">${s.length ? esc(s.join(' · ')) : 'Waiting for players'}</span></span>
-        <span style="font-weight:800;color:${s.length ? 'var(--good)' : 'var(--gold)'}">${s.length ? 'Ready' : 'Open'}</span></div>`; }).join('')}
+        <span style="font-weight:800;color:${s.length ? 'var(--good)' : 'var(--gold)'}">${s.length ? 'Ready' : 'Open'}</span>${s.length ? `<button class="btn ghost" style="min-height:36px;padding:0 14px;font-size:14px" onclick="host('free',{char:'${id}'})">Free seat</button>` : ''}</div>`; }).join('')}
     </div></div>
-    <div class="controls"><button class="btn amber" onclick="host('start')" ${total || (typeof TEST !== 'undefined' && TEST) ? '' : 'disabled'}>Start the game</button></div>`;
+    <div class="controls">${total ? `<button class="btn ghost" onclick="host('reset')">Clear all seats</button>` : ''}<button class="btn amber" onclick="host('start')" ${total || (typeof TEST !== 'undefined' && TEST) ? '' : 'disabled'}>Start the game</button></div>`;
 }
 
 function choosing() {
@@ -958,7 +959,8 @@ function roleView() {
       <div class="card"><b>Who you are</b><span>${esc(c.profile)}</span><span class="muted">Fear: ${esc(c.fear)}</span></div>
       <div class="card"><b>Your powers</b>${c.powers.map(p => `<span>• ${esc(p)}</span>`).join('')}</div>
       <div class="card" style="border:2px solid ${c.color}"><b>How you win (keep it secret)</b><span>${esc(c.win)}</span></div>
-      <p class="muted" style="text-align:center;margin:6px 0 24px">Stay in character. The host will start the game.</p>
+      <p class="muted" style="text-align:center;margin:6px 0 8px">Stay in character. The host will start the game.</p>
+      <button class="btn ghost" data-leave="1" style="margin-bottom:24px">Leave this seat</button>
     </div>`;
 }
 
@@ -1055,6 +1057,7 @@ function endingView() {
 $app.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   if (b.dataset.join) return join(b.dataset.join);
+  if (b.dataset.leave) return api('leave', {});
   if (b.dataset.pick) return api('pick', { key: b.dataset.pick });
   if (b.dataset.agree) return api('agree');
   if (b.dataset.unagree) return api('unagree');
@@ -1081,7 +1084,7 @@ if (MODE === 'host') {
   const addRemote = pid => { if (remote.has(pid)) return; remote.add(pid); clients.add({ pid, el: 'remote:' + pid, fn: () => sendView(pid) }); };
   prevRemote.forEach(addRemote);
   $root.innerHTML = `<div class="hostframe" id="hostframe"><div class="hostscale" id="hostscale"><div class="hostapp app" id="hostapp"></div></div></div>
-    <div class="top" ${TEST ? '' : 'hidden'}><div class="addbar"><span class="chip amber">TEST MODE</span><button id="fillSeats" class="btn amber" style="min-height:40px;font-size:15px">Fill every empty seat on this laptop</button><span class="muted">Or add one:</span>${ORDER.map(s => `<button data-add="${s}" style="color:${CAST[s].color}">+ ${CAST[s].name}</button>`).join('')}</div>
+    <div class="top" style="${TEST ? '' : 'display:none'}"><div class="addbar"><span class="chip amber">TEST MODE</span><button id="fillSeats" class="btn amber" style="min-height:40px;font-size:15px">Fill every empty seat on this laptop</button><span class="muted">Or add one:</span>${ORDER.map(s => `<button data-add="${s}" style="color:${CAST[s].color}">+ ${CAST[s].name}</button>`).join('')}</div>
     <button class="btn ghost" id="newRoom" style="min-height:40px;font-size:14px">New room (new QR code)</button></div>
     <div class="phones" id="phones"></div>`;
   Host(document.getElementById('hostapp'));
@@ -1107,6 +1110,7 @@ if (MODE === 'host') {
     if (!m || typeof m.pid !== 'string' || m.pid.length > 40) return;
     addRemote(m.pid);
     if (m.act === 'hello') return sendView(m.pid);
+    if (String(m.act).startsWith('host/')) return;
     const j = apiCall(String(m.act), { ...(m.data || {}), pid: m.pid });
     if (j && j.error) { mq.publish(TOPIC + '/err/' + m.pid, JSON.stringify(j)); sendView(m.pid); }
   });
