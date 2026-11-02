@@ -270,7 +270,20 @@ function resolveRound(g, picks, toggles = {}) {
     if (resp === 'accept') notes.push({ who: 'Secret channel', text: 'Musk sends a campaign donation. The Mayor accepts.', secret: true });
     if (resp === 'decline') notes.push({ who: 'Secret channel', text: 'Musk offers a campaign donation. The Mayor quietly declines.', secret: true });
     if (resp === 'whistle') { g.tokens.delay = 0;
-      notes.push({ who: NAMES.mayor, text: 'Goes public: Musk tried to buy approval with a campaign donation. Washington stops taking his calls (Call Washington is lost).', big: true }); }
+      notes.push({ who: NAMES.mayor, text: 'Goes public: Musk tried to buy approval with a campaign donation. Washington stops taking his calls (Call Washington is lost).', big: true });
+      g.crashout = { round: r, used: null };
+      notes.push({ who: NAMES.musk, tweet: true, text: 'The Mayor of Memphis is a total clown who just cost his city billions. And the "activists" would rather have smog-free unemployment than the future. Unreal.' });
+      notes.push({ who: NAMES.musk, text: 'Crashes out. From next round, Musk can retaliate once: sue the city, threaten to leave, or send his followers after the residents.', big: true }); }
+  }
+  // 0c. Retaliation after a whistleblower (once). Grounded in Tesla v. Alameda County (2020), the "final straw" HQ moves (2020, 2024), and public attacks on officials.
+  if (toggles.retaliate && g.crashout && !g.crashout.used && r > g.crashout.round) {
+    const k = toggles.retaliate; g.crashout.used = k;
+    if (k === 'sue') { g.suedThrough = ROUNDS.length; notes.push({ who: NAMES.musk, tweet: true, text: 'We are suing the City of Memphis. Unconstitutional. See you in court.' });
+      notes.push({ who: NAMES.musk, text: 'Sues the city. The Mayor\'s Withhold is tied up in court for the rest of the game.', big: true }); }
+    if (k === 'leave') { g.headlinesLost = true; notes.push({ who: NAMES.musk, tweet: true, text: 'Frankly, this is the final straw. Memphis will find out what it\'s like to lose billions. Plenty of states want us.' });
+      notes.push({ who: NAMES.musk, text: 'Threatens to take Colossus elsewhere. Whatever happens now, the Mayor is blamed for driving away billions (the Mayor loses the investment re-election point).', big: true }); }
+    if (k === 'pileon') { g.tokens.mobilize = Math.max(0, g.tokens.mobilize - 1); notes.push({ who: NAMES.musk, tweet: true, text: 'These "community organizers" are paid professional protesters. Look into who funds them.' });
+      notes.push({ who: NAMES.musk, text: 'Turns his followers on the residents. Turnout drops: Residents lose a Mobilize.', big: true }); }
   }
   const halted = stopActive(g, r);
   if (halted) notes.push({ who: 'Stop Work', text: 'Construction and operation are frozen this round.', big: true });
@@ -307,7 +320,8 @@ function resolveRound(g, picks, toggles = {}) {
   if (m === 'fasttrack' && !halted) { g.tokens.fasttrack--; if (mobilized) notes.push({ who: NAMES.mayor, text: 'Tries to fast-track, but the hearing comes first. No speed-up.' }); else { gain += 1; notes.push({ who: NAMES.mayor, text: 'Fast-tracks local approvals.' }); } }
   if (act('business') === 'hype' && !halted) gain += 1;
   if (mobilized && !mayorResponds && gain > 0 && memphisBased) { gain -= 1; notes.push({ who: NAMES.mayor, text: 'Ducks the residents. The required hearing costs xAI a step.' }); }
-  if (withhold && memphisBased && gain > 0) { notes.push({ who: NAMES.mayor, text: 'Withholds local approval. Memphis construction stalls.', big: true }); gain = 0; }
+  if (withhold && g.suedThrough && r <= g.suedThrough) { notes.push({ who: NAMES.mayor, text: 'Tries to withhold approval, but the order is tied up in xAI\'s lawsuit.', big: true }); }
+  else if (withhold && memphisBased && gain > 0) { notes.push({ who: NAMES.mayor, text: 'Withholds local approval. Memphis construction stalls.', big: true }); gain = 0; }
   if (withhold && !memphisBased) notes.push({ who: NAMES.mayor, text: 'Withholds approval, but the new turbines are in Mississippi, beyond the city\'s reach.', big: true });
   if (halted) gain = 0;
   g.build += gain;
@@ -379,6 +393,7 @@ function resolveRound(g, picks, toggles = {}) {
     const n = g.protections.length;
     const bought = g.donation && g.donation.response === 'accept' && !g.donation.exposedRound;
     const mayorApproves = m === 'approve' || (m.startsWith('approve_if2') && n >= 2) || (bought && m !== 'approve');
+    const suedOut = m === 'withhold' && g.suedThrough && r <= g.suedThrough;
     if (bought && m !== 'approve') notes.push({ who: 'Secret channel', text: 'The Mayor\'s public stance changes nothing: the donation already bought final approval.', secret: true });
     const res = act('residents'), bz = act('business');
     const resEnd = res === 'endorse' || (res === 'endorse_if2' && n >= 2);
@@ -389,7 +404,7 @@ function resolveRound(g, picks, toggles = {}) {
     let overridden = false;
     if (m === 'withhold' && toggles.override && g.tokens.delay > 0) { g.tokens.delay--; overridden = true;
       notes.push({ who: NAMES.musk, text: 'Calls Washington. The Mayor\'s refusal is overridden; Colossus opens anyway.', big: true }); }
-    g.final = { mayorApproves, resEnd, bizEnd, regEnd, dealPassed, overridden };
+    g.final = { mayorApproves, resEnd, bizEnd, regEnd, dealPassed, overridden: overridden || suedOut };
     notes.push({ who: 'The Vote', text: `Mayor ${mayorApproves ? 'approves' : 'does not approve'}. Endorsements: Residents ${resEnd ? 'yes' : 'no'}, Businesses ${bizEnd ? 'yes' : 'no'}, Regulators ${regEnd ? 'yes' : 'no'}. The deal ${dealPassed ? 'PASSES' : 'FAILS'}.`, big: true });
     g.over = true;
   }
@@ -426,7 +441,7 @@ function outcome(g) {
   const scandal = !!(bought && g.donation.exposedRound);
   // Re-election: one point each for the project opening (investment headlines), a passed deal, Residents' endorsement,
   // Businesses' endorsement, and a hidden campaign war chest. 3+ = re-elected. An exposed donation ends the career.
-  const reelectParts = { project: operating, deal: !!f.dealPassed, residents: !!f.resEnd, business: !!f.bizEnd, warChest: bought && !scandal };
+  const reelectParts = { project: operating && !g.headlinesLost, deal: !!f.dealPassed, residents: !!f.resEnd, business: !!f.bizEnd, warChest: bought && !scandal };
   const reelect = Object.values(reelectParts).filter(Boolean).length;
   const wins = {
     musk: operating ? (g.builtByR3 && !stopPending ? 'win+' : 'win') : (g.build >= BUILD_TARGET ? 'partial' : 'loss'),
@@ -601,7 +616,7 @@ function reset() {
   S = { room: ROOM, phase: 'lobby', g: E.newGame(), players: {}, picks: {}, post: '', secret: null, timerEnd: null, reveal: null, version: 0 };
   freshPicks();
 }
-function freshPicks() { S.picks = Object.fromEntries(ORDER.map(c => [c, { key: null, agreed: [], target: 'turbines', call: false }])); S.post = ''; }
+function freshPicks() { S.picks = Object.fromEntries(ORDER.map(c => [c, { key: null, agreed: [], target: 'turbines', call: false, retaliate: null }])); S.post = ''; }
 reset();
 
 const seated = c => Object.entries(S.players).filter(([, p]) => p.char === c).map(([id, p]) => ({ id, name: p.name }));
@@ -640,6 +655,7 @@ function view(pid) {
   base.mine = { key: p.key, agreedNames: seated(c).filter(s => p.agreed.includes(s.id)).map(s => s.name), iAgreed: p.agreed.includes(pid), locked: lockedOf(c), target: p.target, call: p.call };
   base.speaker = SPEAKERS[R.id] && SPEAKERS[R.id][c];
   if (c === 'mayor' && base.scandal) base.speaker = ['narrator', 'Reporters are camped outside City Hall. The ethics board has opened a case. Every move you make is headline news now.'];
+  if (c === 'musk' && g.crashout && !g.crashout.used && g.round > g.crashout.round) { base.speaker = ['narrator', 'The Mayor went public and called you a briber. Your lawyers, your followers and your checkbook are standing by.']; base.crashout = { pick: p.retaliate }; }
   if (c === 'musk' && base.scandal) base.speaker = ['narrator', 'The donation is public. Your lawyers say nothing will happen to the company. The Mayor is on their own.'];
   if (c === 'musk') base.powers = { callLeft: g.tokens.delay > 0, call: p.call, post: S.post,
     secretAvailable: !g.donation && g.round < E.ROUNDS.length && !(S.secret && S.secret.round === g.round), secretSent: !!(S.secret && S.secret.round === g.round),
@@ -657,7 +673,7 @@ function doReveal() {
   const g = S.g, picks = {}, R = roundDef();
   ORDER.forEach(c => { if (S.picks[c].key) picks[c] = S.picks[c].key; });
   const call = S.picks.musk.call;
-  const toggles = { delay: call && E.canDelay(g), override: call, investigate: S.picks.regulators.target };
+  const toggles = { delay: call && E.canDelay(g), override: call, investigate: S.picks.regulators.target, retaliate: S.picks.musk.retaliate };
   if (S.secret && S.secret.round === g.round) { toggles.donate = true; toggles.mayorResponse = S.secret.response || 'decline'; }
   const notes = E.resolveRound(g, picks, toggles);
   const lines = ORDER.map(c => { const card = R.cards[c].find(x => x[0] === picks[c]); return { char: c, line: card ? card[1] : null }; });
@@ -671,6 +687,10 @@ function headline(notes, picks) {
   if (/Reaches full compute/.test(t)) return 'Colossus comes online';
   if (/Calls Washington/.test(t)) return 'One call to Washington changes everything';
   if (/SCANDAL/.test(t)) return 'Scandal at City Hall';
+  if (/Goes public: Musk tried/.test(t)) return 'The Mayor blows the whistle, and Musk crashes out';
+  if (/Sues the city/.test(t)) return 'xAI sues the City of Memphis';
+  if (/final straw|Threatens to take Colossus/.test(t)) return '"The final straw": Musk threatens to leave';
+  if (/Turns his followers/.test(t)) return 'Musk turns his followers on the residents';
   if (/Stop Work issued/.test(t)) return 'Regulators issue a Stop Work order';
   if (/frozen this round/.test(t)) return 'Construction frozen';
   if (/Confirmed: unpermitted/.test(t)) return 'Investigators confirm a violation';
@@ -712,6 +732,7 @@ function apiCall(act, b) {
     if (act === 'target' && c === 'regulators') p.target = b.target === 'money' ? 'money' : 'turbines';
     if (act === 'call' && c === 'musk' && S.g.tokens.delay > 0) p.call = !!b.on;
     if (act === 'post' && c === 'musk') S.post = String(b.text || '').slice(0, 280);
+    if (act === 'retaliate' && c === 'musk' && S.g.crashout && !S.g.crashout.used && S.g.round > S.g.crashout.round) p.retaliate = ['sue', 'leave', 'pileon'].includes(b.kind) && p.retaliate !== b.kind ? b.kind : null;
     if (act === 'donate' && c === 'musk' && !S.g.donation && S.g.round < E.ROUNDS.length && !S.secret) S.secret = { round: S.g.round, response: null };
     if (act === 'respond' && c === 'mayor' && S.secret && S.secret.round === S.g.round) S.secret.response = ['accept', 'decline', 'whistle'].includes(b.response) ? b.response : 'decline';
     push(); return ({ ok: true });
@@ -737,12 +758,12 @@ function boardStrip(b) {
     <span>Call Washington <b>${b.tokens.delay > 0 ? 'unused' : 'used'}</b></span></div>`;
 }
 
-function tweet(text) {
+function tweet(text, wide) {
   let h = 0; for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const k = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
   const reply = 2000 + h % 9000, rt = 4000 + (h >>> 3) % 30000, like = 60000 + (h >>> 5) % 400000, views = 4e6 + (h >>> 7) % 2.6e7;
   const icon = d => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B98A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-  return `<div style="width:440px;flex:none;padding:16px 18px;border-radius:18px;background:#000;border:1px solid #2F3336;color:#E7E9EA;font-family:-apple-system,'Segoe UI',Figtree,sans-serif">
+  return `<div style="width:${wide ? '100%' : '440px'};flex:none;padding:16px 18px;border-radius:18px;background:#000;border:1px solid #2F3336;color:#E7E9EA;font-family:-apple-system,'Segoe UI',Figtree,sans-serif">
     <div style="display:flex;gap:12px"><span style="width:48px;height:48px;border-radius:24px;overflow:hidden;background:${CAST.musk.color};flex:none;display:flex;justify-content:center">${portrait('musk', 48)}</span>
     <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:4px;font-size:16px"><b>Elon Musk</b>
       <svg width="18" height="18" viewBox="0 0 24 24" aria-label="verified"><path fill="#1D9BF0" d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.6-.6 2.9 1.2 2.7-2.3 1.9-.4 3-2.9.6-1.8 2.4L12 20.4 9.2 21.5l-1.8-2.4-2.9-.6-.4-3-2.3-1.9 1.2-2.7-.6-2.9 2.6-1.6 1-2.8 3 .2z"/><path d="M8 12.2l2.6 2.6L16.2 9" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -818,7 +839,7 @@ function reveal() {
       <span class="tag" style="background:${CAST[l.char].color};color:${CAST[l.char].ink}">${esc(CAST[l.char].name.toUpperCase())}</span>
       <div class="say">${l.line ? '"' + esc(l.line) + '"' : '<span style="color:#8F89B3">No answer</span>'}</div></div>`).join('')}</div>
     <div class="muted" style="font-size:14px;font-weight:800;letter-spacing:.14em">WHAT HAPPENED</div>
-    <div class="notes">${r.notes.map((n, i) => `<div class="note ${n.big ? 'big' : ''}" style="animation-delay:${.5 + i * .08}s"><b>${esc(n.who.toUpperCase())}</b>${esc(n.text)}</div>`).join('')}</div>
+    <div class="notes">${r.notes.map((n, i) => n.tweet ? `<div style="animation:rise .4s ${.5 + i * .08}s ease both">${tweet(n.text, true)}</div>` : `<div class="note ${n.big ? 'big' : ''}" style="animation-delay:${.5 + i * .08}s"><b>${esc(n.who.toUpperCase())}</b>${esc(n.text)}</div>`).join('')}</div>
     ${boardStrip(r.board)}
   </div>
   <div class="controls"><button class="btn amber" onclick="host('summary')">Round summary</button></div>`;
@@ -934,7 +955,10 @@ function choosingView() {
   let powers = '';
   if (c === 'musk') {
     const P = V.powers;
-    powers = `<div class="panel"><div class="h">POWER MOVES</div>
+    const RT = [['sue', 'Sue the city', 'Tie up the Mayor\'s Withhold in court for the rest of the game. (Tesla v. Alameda County, 2020)'], ['leave', '"Final straw": threaten to leave', 'The Mayor gets blamed for driving away billions and loses the investment re-election point. (Tesla, SpaceX and X headquarters moves)'], ['pileon', 'Send your followers after them', 'Residents lose a Mobilize as turnout drops. (Public attacks on officials and critics)']];
+    const crash = V.crashout ? `<div class="panel" style="background:#2A0F1E;border:2px solid #F43F5E"><div class="h" style="color:#FDA4AF">CRASH OUT · ONE RETALIATION</div><span style="font-size:13px" class="muted">The Mayor called you a briber in public. Pick one, or rise above it.</span>
+      ${RT.map(([k, t, d]) => `<button class="row ${V.crashout.pick === k ? 'on' : ''}" data-retaliate="${k}" ${m.locked ? 'disabled' : ''}><span><b>${t}</b><small>${d}</small></span><span class="pill ${V.crashout.pick === k ? 'on' : ''}">${V.crashout.pick === k ? 'ON' : 'OFF'}</span></button>`).join('')}</div>` : '';
+    powers = crash + `<div class="panel"><div class="h">POWER MOVES</div>
       ${P.callLeft ? `<button class="row ${P.call ? 'on' : ''}" data-call="${P.call ? 0 : 1}" ${m.locked ? 'disabled' : ''}><span><b>Call Washington</b><small>Delay a Stop Work, or overrule the Mayor's final refusal. One use.</small></span><span class="pill ${P.call ? 'on' : ''}">${P.call ? 'ON' : 'OFF'}</span></button>` : `<div class="row"><span><b>Call Washington</b><small>Used up.</small></span></div>`}
       ${P.secretSent ? `<div class="row on"><span><b>Secret channel</b><small>Offer sent to the Mayor. Only they know.</small></span></div>`
         : P.secretAvailable ? `<button class="row" data-donate="1"><span><b>Secret channel to the Mayor</b><small>Privately offer a campaign donation. Once, Rounds 1 to 3.</small></span><span class="pill">OFFER</span></button>`
@@ -992,6 +1016,7 @@ function revealView() {
       <p class="muted" style="margin:0">Eyes on the projector. ${V.phase === 'summary' ? 'Time to discuss.' : ''}</p>
       ${mine && mine.line ? `<div class="card"><span class="muted" style="font-size:13px">You said</span><b style="font-size:18px">"${esc(mine.line)}"</b>${mine.consequence ? `<span>${esc(mine.consequence)}</span>` : ''}</div>` : ''}
       ${r && r.notes.some(n => /^SCANDAL/.test(n.text)) ? `<div class="card" style="background:#B91C1C;color:#fff;animation:pop .4s ease both"><span style="font-size:12px;font-weight:900;letter-spacing:.14em">BREAKING NEWS</span><b style="font-size:22px;font-family:var(--display)">${c === 'mayor' ? 'You got caught.' : 'The Mayor took xAI\'s money.'}</b><span>Ethics case opened. The bought approval is void, Fast Track is revoked, and Residents get an extra Mobilize. ${c === 'musk' ? 'Nothing happens to you.' : ''}</span></div>` : ''}
+      ${r ? r.notes.filter(n => n.tweet).map(n => `<div class="card" style="background:#000;border:1px solid #2F3336;gap:6px"><span style="display:flex;align-items:center;gap:8px"><span style="width:32px;height:32px;border-radius:16px;overflow:hidden;background:${CAST.musk.color};display:inline-flex;justify-content:center">${portrait('musk', 32)}</span><b>Elon Musk</b><span style="color:#71767B">@elonmusk</span></span><span style="font-size:16px;line-height:1.35">${esc(n.text)}</span></div>`).join('') : ''}
       ${secret.map(n => `<div class="card" style="border:1px solid #6B4E1A;background:#2A1F12"><span style="font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--gold)">PRIVATE</span><span>${esc(n.text)}</span></div>`).join('')}
       ${V.phase === 'summary' ? `<div class="card"><b>Discuss</b>${r.prompts.map(p => `<span>• ${esc(p)}</span>`).join('')}</div>` : ''}
     </div>`;
@@ -1020,6 +1045,7 @@ $app.addEventListener('click', e => {
   if (b.dataset.unagree) return api('unagree');
   if (b.dataset.call) return api('call', { on: b.dataset.call === '1' });
   if (b.dataset.donate) return api('donate');
+  if (b.dataset.retaliate) return api('retaliate', { kind: b.dataset.retaliate });
   if (b.dataset.target) return api('target', { target: b.dataset.target });
   if (b.dataset.respond) return api('respond', { response: b.dataset.respond });
 });
