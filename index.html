@@ -585,6 +585,8 @@ const params = new URLSearchParams(location.search);
 const BROKER = params.get('broker') || 'wss://broker.hivemq.com:8884/mqtt';
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 const MODE = params.get('room') ? 'phone' : 'host';
+const TEST = params.has('test');
+const V_taken = c => Object.values(S.players).some(p => p.char === c);
 let MY_PID = store.get('colossus-player-id'); if (!MY_PID) { MY_PID = 'p' + Math.random().toString(36).slice(2, 10); store.set('colossus-player-id', MY_PID); }
 let saved = null; try { saved = MODE === 'host' ? JSON.parse(store.get('colossus-host') || 'null') : null; } catch (e) {}
 const ROOM = MODE === 'phone' ? params.get('room').toUpperCase() : (saved && saved.room) || Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -682,7 +684,7 @@ function apiCall(act, b) {
       const c = b.char; if (!CAST[c]) return ({ error: 'Unknown character' });
       const pid = b.pid && S.players[b.pid] ? b.pid : (b.pid || Math.random().toString(36).slice(2));
       if (S.players[pid] && S.players[pid].char === c) { S.players[pid].name = b.name || S.players[pid].name; }
-      else { if (seated(c).length >= 2) return ({ error: 'Both seats are taken' }); S.players[pid] = { name: (b.name || 'Player').slice(0, 24), char: c }; }
+      else { if (seated(c).length >= 1) return ({ error: 'Someone is already playing this character' }); S.players[pid] = { name: (b.name || 'Player').slice(0, 24), char: c }; }
       push(); return ({ pid });
     }
     if (act === 'leave') { if (me) { delete S.players[b.pid]; ORDER.forEach(c => S.picks[c].agreed = S.picks[c].agreed.filter(x => x !== b.pid)); push(); } return ({ ok: true }); }
@@ -711,7 +713,7 @@ function apiCall(act, b) {
 }
 
 let LOCAL;
-function host(a, d) { LOCAL.api('host/' + a, d || {}); }
+var host = function (a, d) { LOCAL.api('host/' + a, d || {}); };
 function Host(root) {
 let V = null;
 const $app = root;
@@ -743,20 +745,20 @@ function lobby() {
     <div style="display:flex;flex-direction:column;gap:18px">
       <div style="font-size:15px;font-weight:800;letter-spacing:.16em;color:var(--gold)">IDS 704 · CASE STUDY</div>
       <h1 style="font-size:112px;font-weight:800;letter-spacing:-.03em">Colossus</h1>
-      <p style="font-size:22px;line-height:1.4;margin:0;max-width:560px;color:#E6E1F5">Memphis, 2024. A supercomputer moves in next to neighborhoods that already fail air-quality standards. Five sides. Four rounds. One deal.</p>
+      <p style="font-size:22px;line-height:1.4;margin:0;max-width:560px;color:#E6E1F5">Memphis, 2024. A supercomputer moves in next to neighborhoods that already fail air-quality standards. Five players. Four rounds. One deal.</p>
       <div style="display:flex;align-items:center;gap:24px;margin-top:auto">
         ${window.QR_HTML || '<div style="width:210px;height:210px;border-radius:16px;background:var(--paper)"></div>'}
         <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:28px;font-weight:800">Scan to join</span>
           <span class="muted" style="font-size:18px;word-break:break-all">or open ${esc(V.joinUrl)}</span><span id="relay" class="muted" style="font-size:15px">${esc(window.RELAY_STATUS || "")}</span><span class="muted" style="font-size:18px">Room <b style="color:var(--ink)">${esc(V.room)}</b></span></div></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;justify-content:center">
-      <div class="muted" style="font-size:15px;font-weight:800;letter-spacing:.16em">PLAYERS · ${total} OF 10 JOINED</div>
+      <div class="muted" style="font-size:15px;font-weight:800;letter-spacing:.16em">PLAYERS · ${total} OF 5 JOINED</div>
       ${ORDER.map(id => { const s = V.seats[id]; return `<div style="display:flex;align-items:center;gap:16px;min-height:88px;padding:8px 22px 8px 10px;border-radius:20px;background:var(--panel)">
         <span style="width:68px;height:68px;border-radius:34px;overflow:hidden;background:${CAST[id].color};display:flex;justify-content:center;flex:none">${portrait(id, 68)}</span>
         <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:22px;font-weight:800">${esc(CAST[id].name)}</span><span class="muted" style="font-size:16px">${s.length ? esc(s.join(' · ')) : 'Waiting for players'}</span></span>
-        <span style="font-weight:800;color:${s.length === 2 ? 'var(--good)' : 'var(--gold)'}">${s.length} of 2</span></div>`; }).join('')}
+        <span style="font-weight:800;color:${s.length ? 'var(--good)' : 'var(--gold)'}">${s.length ? 'Ready' : 'Open'}</span></div>`; }).join('')}
     </div></div>
-    <div class="controls"><button class="btn amber" onclick="host('start')" ${total ? '' : 'disabled'}>Start the game</button></div>`;
+    <div class="controls"><button class="btn amber" onclick="host('start')" ${total || (typeof TEST !== 'undefined' && TEST) ? '' : 'disabled'}>Start the game</button></div>`;
 }
 
 function choosing() {
@@ -871,12 +873,12 @@ function joinView() {
       <label for="name" style="font-weight:700">Your first name</label>
       <input id="name" type="text" autocomplete="given-name" placeholder="e.g. Sam" value="${esc(qs.get('name') || '')}">
       <div style="font-weight:700;margin-top:6px">Pick your character</div>
-      ${ORDER.map(id => { const c = CAST[id], n = V.seats[id].length, full = n >= 2;
+      ${ORDER.map(id => { const c = CAST[id], n = V.seats[id].length, full = n >= 1;
         return `<button class="cast" data-join="${id}" ${full ? 'disabled' : ''} style="border-color:${full ? 'var(--line)' : c.color}">
           <span class="face" style="background:${c.color}">${portrait(id, 56)}</span>
           <span class="t"><b>${esc(c.name)}</b><span>${esc(c.profile)}</span></span>
-          <span class="muted" style="font-size:12px;font-weight:700;white-space:nowrap">${n} of 2</span></button>`; }).join('')}
-      <p class="muted" style="font-size:13px;margin:0">Two players share each character and must agree on every move.</p>
+          <span style="font-size:12px;font-weight:800;white-space:nowrap;color:${full ? 'var(--muted)' : 'var(--good)'}">${full ? 'Taken' : 'Open'}</span></button>`; }).join('')}
+      <p class="muted" style="font-size:13px;margin:0">One player per character. Stay in character the whole game.</p>
     </div>`;
 }
 
@@ -886,8 +888,7 @@ function roleView() {
       <div class="topbar">${myChip()}<span class="chip dark">Room ${esc(V.room)}</span></div>
       <div class="speaker">${portrait(V.me.char, 210)}</div></div>
     <div class="wrap">
-      <div><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:${c.color}">YOU ARE</div><h1 style="font-size:40px">${esc(c.name)}</h1>
-      <div class="muted">${V.partners.length ? 'With ' + esc(V.partners.join(', ')) : 'Waiting for your partner to join'}</div></div>
+      <div><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:${c.color}">YOU ARE</div><h1 style="font-size:40px">${esc(c.name)}</h1></div>
       <div class="card"><b>Who you are</b><span>${esc(c.profile)}</span><span class="muted">Fear: ${esc(c.fear)}</span></div>
       <div class="card"><b>Your powers</b>${c.powers.map(p => `<span>• ${esc(p)}</span>`).join('')}</div>
       <div class="card" style="border:2px solid ${c.color}"><b>How you win (keep it secret)</b><span>${esc(c.win)}</span></div>
@@ -921,13 +922,13 @@ function choosingView() {
 
   let bottom;
   if (!m.key) bottom = `<div class="status">Pick what your character says.</div>`;
-  else if (m.locked) bottom = `<button class="btn good" disabled style="opacity:1">Locked in</button><button class="btn ghost" data-unagree="1">Change our mind</button>`;
+  else if (m.locked) bottom = `<button class="btn good" disabled style="opacity:1">Locked in</button><button class="btn ghost" data-unagree="1">Change my mind</button>`;
   else if (m.iAgreed) bottom = `<div class="status">You agreed. Waiting for ${esc(V.partners.join(', ') || 'your partner')} to agree.</div><button class="btn ghost" data-unagree="1">Take it back</button>`;
-  else bottom = `${m.agreedNames.length ? `<div class="status">${esc(m.agreedNames.join(', '))} agreed to ${m.key}.</div>` : ''}<button class="btn" data-agree="1">Agree and lock in</button>`;
+  else bottom = `<button class="btn" data-agree="1">Lock in</button>`;
 
   const secretOverlay = (c === 'mayor' && V.secret && !V.secret.response) ? `<div class="overlay"><div class="inner">
       <div class="h" style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--gold)">PRIVATE CHANNEL · ROUND ${V.round}</div>
-      <p class="muted" style="margin:0">Only the Mayor players can see this. Nobody else knows it exists.</p>
+      <p class="muted" style="margin:0">Only you can see this. Nobody else knows it exists.</p>
       <div style="display:flex;gap:10px;align-items:flex-end"><span style="width:44px;height:44px;border-radius:22px;overflow:hidden;background:${CAST.musk.color};flex:none">${portrait('musk', 44)}</span>
       <div style="display:flex;flex-direction:column;gap:6px"><b style="font-size:12px;color:#C4B5FD">Musk / xAI</b><div class="bubble">Big fan of what you're doing for Memphis. Some friends want to support your re-election.</div><div class="bubble">No strings. We'd just hate to see final approval get stuck.</div></div></div>
       <div class="receipt"><span style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#6B5FA0">CAMPAIGN CONTRIBUTION</span><span style="font-family:var(--display);font-size:28px;font-weight:800">Seven figures</span>
@@ -1000,14 +1001,14 @@ if (MODE === 'host') {
   document.body.classList.add('host');
   const prevRemote = Object.keys(S.players).filter(p => !ORDER.includes(p)), remote = new Set();
   LOCAL = {
-    api(path, b) { return apiCall(path, b) || {}; },
+    api(path, b) { if (path === 'host/start' && window.BEFORE_START) window.BEFORE_START(); return apiCall(path, b) || {}; },
     subscribe(pid, el, fn) { for (const c of [...clients]) if (c.el === el) clients.delete(c); clients.add({ pid, el, fn }); fn(JSON.parse(JSON.stringify(view(pid)))); },
   };
   const sendView = pid => mq.connected && mq.publish(TOPIC + '/view/' + pid, JSON.stringify(view(pid)));
   const addRemote = pid => { if (remote.has(pid)) return; remote.add(pid); clients.add({ pid, el: 'remote:' + pid, fn: () => sendView(pid) }); };
   prevRemote.forEach(addRemote);
   $root.innerHTML = `<div class="hostframe" id="hostframe"><div class="hostscale" id="hostscale"><div class="hostapp app" id="hostapp"></div></div></div>
-    <div class="top"><div class="addbar"><span class="muted">Testing alone? Play a character on this screen:</span>${ORDER.map(s => `<button data-add="${s}" style="color:${CAST[s].color}">+ ${CAST[s].name}</button>`).join('')}</div>
+    <div class="top" ${TEST ? '' : 'hidden'}><div class="addbar"><span class="chip amber">TEST MODE</span><button id="fillSeats" class="btn amber" style="min-height:40px;font-size:15px">Fill every empty seat on this laptop</button><span class="muted">Or add one:</span>${ORDER.map(s => `<button data-add="${s}" style="color:${CAST[s].color}">+ ${CAST[s].name}</button>`).join('')}</div>
     <button class="btn ghost" id="newRoom" style="min-height:40px;font-size:14px">New room (new QR code)</button></div>
     <div class="phones" id="phones"></div>`;
   Host(document.getElementById('hostapp'));
@@ -1015,7 +1016,10 @@ if (MODE === 'host') {
     w.innerHTML = `<b style="color:${CAST[s].color}">${CAST[s].name} (this screen)</b><div class="phonebox"><div class="phoneapp app" id="ph-${s}"></div></div>`;
     document.getElementById('phones').appendChild(w); Player(document.getElementById('ph-' + s), s); };
   ORDER.filter(s => S.players[s]).forEach(addLocal);
-  document.querySelector('.addbar').addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (b) addLocal(b.dataset.add); });
+  document.querySelector('.addbar').addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (b && !S.players[b.dataset.add] && !(V_taken(b.dataset.add))) addLocal(b.dataset.add); });
+  const fill = () => ORDER.forEach(s => { if (!V_taken(s)) addLocal(s); });
+  document.getElementById('fillSeats').onclick = fill;
+  window.BEFORE_START = TEST ? fill : null;
   document.getElementById('newRoom').onclick = () => { store.set('colossus-host', ''); location.reload(); };
   function fit() { const w = document.getElementById('hostframe').clientWidth, k = Math.min(1.5, w / 1280); document.getElementById('hostscale').style.transform = 'scale(' + k + ')'; document.getElementById('hostframe').style.height = (720 * k) + 'px'; }
   addEventListener('resize', fit); fit();
