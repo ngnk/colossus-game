@@ -271,20 +271,27 @@ function resolveRound(g, picks, toggles = {}) {
     if (resp === 'decline') notes.push({ who: 'Secret channel', text: 'Musk offers a campaign donation. The Mayor quietly declines.', secret: true });
     if (resp === 'whistle') { g.tokens.delay = 0;
       notes.push({ who: NAMES.mayor, text: 'Goes public: Musk tried to buy approval with a campaign donation. Washington stops taking his calls (Call Washington is lost).', big: true });
-      g.crashout = { round: r, used: null };
-      notes.push({ who: NAMES.musk, tweet: true, text: 'The Mayor of Memphis is a total clown who just cost his city billions. And the "activists" would rather have smog-free unemployment than the future. Unreal.' });
-      notes.push({ who: NAMES.musk, text: 'Crashes out. From next round, Musk can retaliate once: sue the city, threaten to leave, or send his followers after the residents.', big: true }); }
+      g.whistled = r; notes.push({ who: NAMES.musk, tweet: true, text: 'The Mayor of Memphis is a total clown who just cost his city billions. And the "activists" would rather have smog-free unemployment than the future. Unreal.' }); }
   }
-  // 0c. Retaliation after a whistleblower (once). Grounded in Tesla v. Alameda County (2020), the "final straw" HQ moves (2020, 2024), and public attacks on officials.
+  // 0c. Capital fights back (once per game), from the round after Musk is first blocked or exposed.
+  // Each card mirrors a documented move by a company or billionaire when local politics went against it.
   if (toggles.retaliate && g.crashout && !g.crashout.used && r > g.crashout.round) {
     const k = toggles.retaliate; g.crashout.used = k;
-    if (k === 'sue') { g.suedThrough = ROUNDS.length; notes.push({ who: NAMES.musk, tweet: true, text: 'We are suing the City of Memphis. Unconstitutional. See you in court.' });
+    if (k === 'sue') { g.suedThrough = ROUNDS.length;
+      notes.push({ who: NAMES.musk, tweet: true, text: 'We are suing the City of Memphis. Unconstitutional. See you in court.' });
       notes.push({ who: NAMES.musk, text: 'Sues the city. The Mayor\'s Withhold is tied up in court for the rest of the game.', big: true }); }
-    if (k === 'leave') { g.headlinesLost = true; notes.push({ who: NAMES.musk, tweet: true, text: 'Frankly, this is the final straw. Memphis will find out what it\'s like to lose billions. Plenty of states want us.' });
-      notes.push({ who: NAMES.musk, text: 'Threatens to take Colossus elsewhere. Whatever happens now, the Mayor is blamed for driving away billions (the Mayor loses the investment re-election point).', big: true }); }
-    if (k === 'pileon') { g.tokens.mobilize = Math.max(0, g.tokens.mobilize - 1); notes.push({ who: NAMES.musk, tweet: true, text: 'These "community organizers" are paid professional protesters. Look into who funds them.' });
-      notes.push({ who: NAMES.musk, text: 'Turns his followers on the residents. Turnout drops: Residents lose a Mobilize.', big: true }); }
+    if (k === 'preempt') { g.preemptedFrom = r + 1;
+      notes.push({ who: NAMES.musk, tweet: true, text: 'Great meeting with state leaders today. America cannot let one city block the future of AI.' });
+      notes.push({ who: NAMES.musk, text: 'Lobbies the state to override local control. From next round, the Mayor\'s Withhold and Residents\' Mobilize no longer bind.', big: true }); }
+    if (k === 'challenger') { g.challenger = true;
+      notes.push({ who: NAMES.musk, tweet: true, text: 'Memphis deserves a mayor who builds. Proud to support new leadership.' });
+      notes.push({ who: NAMES.musk, text: 'Bankrolls a challenger. The Mayor now needs 4 of 5 to be re-elected.', big: true }); }
+    if (k === 'leave') { g.headlinesLost = true; g.investmentPaused = true;
+      notes.push({ who: NAMES.musk, tweet: true, text: 'Frankly, this is the final straw. Pausing all Memphis investment. Plenty of states want us.' });
+      notes.push({ who: NAMES.musk, text: 'Pauses investment and threatens to leave. The Mayor is blamed for losing billions (loses the investment point) and local contractors lose work.', big: true }); }
   }
+  const crashTrigger = (why) => { if (!g.crashout) { g.crashout = { round: r, used: null, why };
+    notes.push({ who: NAMES.musk, text: 'Crashes out. From next round, Musk can strike back once: sue, go over their heads to the state, bankroll a challenger, or pause investment.', big: true }); } };
   const halted = stopActive(g, r);
   if (halted) notes.push({ who: 'Stop Work', text: 'Construction and operation are frozen this round.', big: true });
 
@@ -294,7 +301,9 @@ function resolveRound(g, picks, toggles = {}) {
   if (m === 'grid_ratepayers') { g.gridApproved = true; if (act('business') === 'lobby') { g.ratepayers = false; addProt(g, 'rates', 'xAI', notes, NAMES.business); notes.push({ who: NAMES.business, text: 'Lobbying shifts the upgrade bill from ratepayers to xAI.' }); } else { g.ratepayers = true; notes.push({ who: NAMES.mayor, text: 'Grid approved. Household and business ratepayers share the upgrade cost.' }); } }
   if (m === 'grid_xai') { g.gridApproved = true; g.ratepayers = false; addProt(g, 'rates', 'xAI', notes, NAMES.mayor); }
   if (m === 'nda') { g.secrecy = true; }
-  const mobilized = act('residents') === 'mobilize';
+  const preempted = g.preemptedFrom && r >= g.preemptedFrom;
+  const mobilized = act('residents') === 'mobilize' && !preempted;
+  if (act('residents') === 'mobilize' && preempted) notes.push({ who: NAMES.residents, text: 'Pack City Hall, but the state has taken the decision out of the city\'s hands.' });
   if (mobilized) { g.tokens.mobilize--; notes.push({ who: NAMES.residents, text: 'Mobilize: the Mayor must answer residents publicly before approving anything else.', big: true }); }
   const mayorResponds = ['lock', 'withhold', 'grid_xai', 'purse'].includes(m) || m.startsWith('approve_if2');
 
@@ -320,7 +329,8 @@ function resolveRound(g, picks, toggles = {}) {
   if (m === 'fasttrack' && !halted) { g.tokens.fasttrack--; if (mobilized) notes.push({ who: NAMES.mayor, text: 'Tries to fast-track, but the hearing comes first. No speed-up.' }); else { gain += 1; notes.push({ who: NAMES.mayor, text: 'Fast-tracks local approvals.' }); } }
   if (act('business') === 'hype' && !halted) gain += 1;
   if (mobilized && !mayorResponds && gain > 0 && memphisBased) { gain -= 1; notes.push({ who: NAMES.mayor, text: 'Ducks the residents. The required hearing costs xAI a step.' }); }
-  if (withhold && g.suedThrough && r <= g.suedThrough) { notes.push({ who: NAMES.mayor, text: 'Tries to withhold approval, but the order is tied up in xAI\'s lawsuit.', big: true }); }
+  if (withhold && preempted) { notes.push({ who: NAMES.mayor, text: 'Tries to withhold approval, but state law now overrides the city.', big: true }); }
+  else if (withhold && g.suedThrough && r <= g.suedThrough) { notes.push({ who: NAMES.mayor, text: 'Tries to withhold approval, but the order is tied up in xAI\'s lawsuit.', big: true }); }
   else if (withhold && memphisBased && gain > 0) { notes.push({ who: NAMES.mayor, text: 'Withholds local approval. Memphis construction stalls.', big: true }); gain = 0; }
   if (withhold && !memphisBased) notes.push({ who: NAMES.mayor, text: 'Withholds approval, but the new turbines are in Mississippi, beyond the city\'s reach.', big: true });
   if (halted) gain = 0;
@@ -369,6 +379,10 @@ function resolveRound(g, picks, toggles = {}) {
   }
   if (g.conditional && g.permitted && g.turbines) addProt(g, 'permits', 'xAI', notes, NAMES.regulators);
 
+  // 5b. Capital is blocked or exposed -> Musk crashes out (once)
+  if (g.whistled === r) crashTrigger('whistle');
+  else if (withhold && !preempted && !(g.suedThrough && r <= g.suedThrough)) crashTrigger('withhold');
+  else if (rg === 'stop' && g.stop && g.stop.issued === r) crashTrigger('stop');
   // 6. Investigations conclude
   g.investigations.filter(i => !i.done && i.end === r).forEach(i => { i.done = true;
     if (i.target === 'turbines') {
@@ -393,7 +407,7 @@ function resolveRound(g, picks, toggles = {}) {
     const n = g.protections.length;
     const bought = g.donation && g.donation.response === 'accept' && !g.donation.exposedRound;
     const mayorApproves = m === 'approve' || (m.startsWith('approve_if2') && n >= 2) || (bought && m !== 'approve');
-    const suedOut = m === 'withhold' && g.suedThrough && r <= g.suedThrough;
+    const suedOut = m === 'withhold' && ((g.suedThrough && r <= g.suedThrough) || (g.preemptedFrom && r >= g.preemptedFrom));
     if (bought && m !== 'approve') notes.push({ who: 'Secret channel', text: 'The Mayor\'s public stance changes nothing: the donation already bought final approval.', secret: true });
     const res = act('residents'), bz = act('business');
     const resEnd = res === 'endorse' || (res === 'endorse_if2' && n >= 2);
@@ -445,9 +459,9 @@ function outcome(g) {
   const reelect = Object.values(reelectParts).filter(Boolean).length;
   const wins = {
     musk: operating ? (g.builtByR3 && !stopPending ? 'win+' : 'win') : (g.build >= BUILD_TARGET ? 'partial' : 'loss'),
-    mayor: scandal ? 'loss' : reelect >= 3 ? 'win' : reelect === 2 ? 'partial' : 'loss',
+    mayor: scandal ? 'loss' : reelect >= (g.challenger ? 4 : 3) ? 'win' : reelect >= (g.challenger ? 3 : 2) ? 'partial' : 'loss',
     residents: !operating ? 'win' : (n >= 2 && g.protections.some(p => ['hiring','health'].includes(p.id)) ? 'partial' : 'loss'),
-    business: has(g, 'hiring') && !g.ratepayers && !g.businessFollowed ? 'win' : (has(g, 'hiring') || !g.ratepayers) ? 'partial' : 'loss',
+    business: has(g, 'hiring') && !g.ratepayers && !g.businessFollowed && !g.investmentPaused ? 'win' : (has(g, 'hiring') || !g.ratepayers) ? 'partial' : 'loss',
     regulators: !uninvestigated && !unpermitted && (g.conditional || g.stop) ? 'win' : (!uninvestigated || g.conditional) ? 'partial' : 'loss',
   };
   return { ending, operating, wins, protections: n, air: g.air, dealPassed: !!f.dealPassed, donation: g.donation, scandal, reelect, reelectParts };
@@ -655,7 +669,7 @@ function view(pid) {
   base.mine = { key: p.key, agreedNames: seated(c).filter(s => p.agreed.includes(s.id)).map(s => s.name), iAgreed: p.agreed.includes(pid), locked: lockedOf(c), target: p.target, call: p.call };
   base.speaker = SPEAKERS[R.id] && SPEAKERS[R.id][c];
   if (c === 'mayor' && base.scandal) base.speaker = ['narrator', 'Reporters are camped outside City Hall. The ethics board has opened a case. Every move you make is headline news now.'];
-  if (c === 'musk' && g.crashout && !g.crashout.used && g.round > g.crashout.round) { base.speaker = ['narrator', 'The Mayor went public and called you a briber. Your lawyers, your followers and your checkbook are standing by.']; base.crashout = { pick: p.retaliate }; }
+  if (c === 'musk' && g.crashout && !g.crashout.used && g.round > g.crashout.round) { base.speaker = ['narrator', g.crashout.why === 'whistle' ? 'The Mayor went public and called you a briber. Your lawyers, lobbyists and checkbook are standing by.' : g.crashout.why === 'stop' ? 'Regulators just shut you down. Your lawyers, lobbyists and checkbook are standing by.' : 'City Hall just blocked you. Your lawyers, lobbyists and checkbook are standing by.']; base.crashout = { pick: p.retaliate }; }
   if (c === 'musk' && base.scandal) base.speaker = ['narrator', 'The donation is public. Your lawyers say nothing will happen to the company. The Mayor is on their own.'];
   if (c === 'musk') base.powers = { callLeft: g.tokens.delay > 0, call: p.call, post: S.post,
     secretAvailable: !g.donation && g.round < E.ROUNDS.length && !(S.secret && S.secret.round === g.round), secretSent: !!(S.secret && S.secret.round === g.round),
@@ -689,8 +703,9 @@ function headline(notes, picks) {
   if (/SCANDAL/.test(t)) return 'Scandal at City Hall';
   if (/Goes public: Musk tried/.test(t)) return 'The Mayor blows the whistle, and Musk crashes out';
   if (/Sues the city/.test(t)) return 'xAI sues the City of Memphis';
-  if (/final straw|Threatens to take Colossus/.test(t)) return '"The final straw": Musk threatens to leave';
-  if (/Turns his followers/.test(t)) return 'Musk turns his followers on the residents';
+  if (/Lobbies the state/.test(t)) return 'xAI goes over the city\'s head to the state';
+  if (/Bankrolls a challenger/.test(t)) return 'Musk bankrolls a challenger to the Mayor';
+  if (/Pauses investment/.test(t)) return '"The final straw": xAI pauses investment';
   if (/Stop Work issued/.test(t)) return 'Regulators issue a Stop Work order';
   if (/frozen this round/.test(t)) return 'Construction frozen';
   if (/Confirmed: unpermitted/.test(t)) return 'Investigators confirm a violation';
@@ -732,7 +747,7 @@ function apiCall(act, b) {
     if (act === 'target' && c === 'regulators') p.target = b.target === 'money' ? 'money' : 'turbines';
     if (act === 'call' && c === 'musk' && S.g.tokens.delay > 0) p.call = !!b.on;
     if (act === 'post' && c === 'musk') S.post = String(b.text || '').slice(0, 280);
-    if (act === 'retaliate' && c === 'musk' && S.g.crashout && !S.g.crashout.used && S.g.round > S.g.crashout.round) p.retaliate = ['sue', 'leave', 'pileon'].includes(b.kind) && p.retaliate !== b.kind ? b.kind : null;
+    if (act === 'retaliate' && c === 'musk' && S.g.crashout && !S.g.crashout.used && S.g.round > S.g.crashout.round) p.retaliate = ['sue', 'preempt', 'challenger', 'leave'].includes(b.kind) && p.retaliate !== b.kind ? b.kind : null;
     if (act === 'donate' && c === 'musk' && !S.g.donation && S.g.round < E.ROUNDS.length && !S.secret) S.secret = { round: S.g.round, response: null };
     if (act === 'respond' && c === 'mayor' && S.secret && S.secret.round === S.g.round) S.secret.response = ['accept', 'decline', 'whistle'].includes(b.response) ? b.response : 'decline';
     push(); return ({ ok: true });
@@ -955,8 +970,8 @@ function choosingView() {
   let powers = '';
   if (c === 'musk') {
     const P = V.powers;
-    const RT = [['sue', 'Sue the city', 'Tie up the Mayor\'s Withhold in court for the rest of the game. (Tesla v. Alameda County, 2020)'], ['leave', '"Final straw": threaten to leave', 'The Mayor gets blamed for driving away billions and loses the investment re-election point. (Tesla, SpaceX and X headquarters moves)'], ['pileon', 'Send your followers after them', 'Residents lose a Mobilize as turnout drops. (Public attacks on officials and critics)']];
-    const crash = V.crashout ? `<div class="panel" style="background:#2A0F1E;border:2px solid #F43F5E"><div class="h" style="color:#FDA4AF">CRASH OUT · ONE RETALIATION</div><span style="font-size:13px" class="muted">The Mayor called you a briber in public. Pick one, or rise above it.</span>
+    const RT = [['sue', 'Sue the city', 'The Mayor\'s Withhold is tied up in court for the rest of the game. Like: a developer suing a New Jersey town for $300M over its data center ban (2026).'], ['preempt', 'Go over their heads', 'Lobby the state to override local control. From next round, Withhold and Mobilize stop working. Like: West Virginia barring localities from regulating data centers (2025).'], ['challenger', 'Bankroll a challenger', 'The Mayor needs 4 of 5 to be re-elected. Like: Amazon\'s $1.5M in Seattle\'s 2019 council races.'], ['leave', 'Pause investment, threaten to leave', 'The Mayor is blamed for losing billions; local contractors lose work. Like: Amazon pausing a Seattle tower until the city repealed a tax (2018).']];
+    const crash = V.crashout ? `<div class="panel" style="background:#2A0F1E;border:2px solid #F43F5E"><div class="h" style="color:#FDA4AF">STRIKE BACK · ONCE PER GAME</div><span style="font-size:13px" class="muted">You were blocked. Use the tools capital has, or rise above it.</span>
       ${RT.map(([k, t, d]) => `<button class="row ${V.crashout.pick === k ? 'on' : ''}" data-retaliate="${k}" ${m.locked ? 'disabled' : ''}><span><b>${t}</b><small>${d}</small></span><span class="pill ${V.crashout.pick === k ? 'on' : ''}">${V.crashout.pick === k ? 'ON' : 'OFF'}</span></button>`).join('')}</div>` : '';
     powers = crash + `<div class="panel"><div class="h">POWER MOVES</div>
       ${P.callLeft ? `<button class="row ${P.call ? 'on' : ''}" data-call="${P.call ? 0 : 1}" ${m.locked ? 'disabled' : ''}><span><b>Call Washington</b><small>Delay a Stop Work, or overrule the Mayor's final refusal. One use.</small></span><span class="pill ${P.call ? 'on' : ''}">${P.call ? 'ON' : 'OFF'}</span></button>` : `<div class="row"><span><b>Call Washington</b><small>Used up.</small></span></div>`}
