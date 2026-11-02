@@ -176,7 +176,7 @@ const ROUNDS = [
       business:   [['A','Two biggest supercomputers, times four!','hype'], ['B','What\'s in it for local suppliers?','bargain'], ['C','Stay out of the photo op.','neutral']],
       regulators: [['A','Not our jurisdiction.','pass'], ['B','Open an investigation.','investigate'], ['C','No operation without air permits.','conditional']],
     },
-    prompts: ['Who knew about this deal before the public did, and why?', 'Did anyone get a promise in writing? What is a spoken promise worth?'] },
+    prompts: ['What here is a problem even if it is legal?', 'What would a responsible process have looked like in this community?'] },
   { id: 'power', title: 'The Power Gap', when: 'August 2024',
     scene: 'The grid can only supply a third of the power Colossus needs. Grid upgrades take years. Gas turbines are on trucks outside.',
     cards: {
@@ -186,7 +186,7 @@ const ROUNDS = [
       business:   [['A','Bid for the construction contracts.','hype'], ['B','Local hiring, in writing, or no support.','bargain'], ['C','Fight any rate hike.','lobby']],
       regulators: [['A','They\'re mobile. They\'re exempt.','pass'], ['B','Inspect those turbines.','investigate'], ['C','Stop Work.','stop']],
     },
-    prompts: ['Speed or permits: who decided, and who breathes the result?', 'Who is paying for the power: xAI, ratepayers, or residents\' lungs?'] },
+    prompts: ['Whose job should it be to collect evidence that the turbines cause harm?', 'Who actually did that work, here and in the real case?'] },
   { id: 'stateline', title: 'Across the State Line', when: '2025 to 2026',
     scene: 'This really happened: for its second data center, xAI put 57 gas turbines in Southaven, Mississippi, a mile from the Memphis site. Memphis has no authority there, and Memphis residents can\'t vote in Mississippi.',
     cards: {
@@ -196,7 +196,7 @@ const ROUNDS = [
       business:   [['A','Follow the money to Mississippi.','follow'], ['B','Our customers breathe this. Back the residents.','backres'], ['C','Local purchasing, in writing.','bargain']],
       regulators: [['A','Refer it to Mississippi.','pass'], ['B','Investigate.','investigate'], ['C','Stop Work.','stop']],
     },
-    prompts: ['The pollution crossed the state line. Did accountability cross with it?', 'Who in this room can speak for Southaven?'] },
+    prompts: ['This community already fails air-quality standards. Should it take less evidence to act here?', 'The pollution crossed the state line. Did accountability cross with it?'] },
   { id: 'lawsuit', title: 'The Lawsuit and the Deal', when: 'April to June 2026',
     scene: 'Civil rights groups sue. Washington says the turbines matter for national security. The final deal goes to a vote.',
     cards: {
@@ -206,7 +206,7 @@ const ROUNDS = [
       business:   [['A','Endorse.','endorse'], ['B','Oppose.','oppose'], ['C','Endorse only with written hiring.','endorse_ifhiring']],
       regulators: [['A','Wave it through.','approve_plain'], ['B','Approve, with conditions in a consent decree.','conditional_approve+lock'], ['C','Stop Work.','stop']],
     },
-    prompts: ['Did the deal pass? Was it binding, or just promises?', 'Who would have had to concede what for a better outcome?'] },
+    prompts: ['What would a fair process for a data center like this look like?', 'What would you need to see to know the harms and benefits were fairly shared?'] },
 ];
 
 const BUILD_TARGET = 6;
